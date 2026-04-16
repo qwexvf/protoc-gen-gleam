@@ -383,6 +383,7 @@ pub fn encode_bytes_field(field_number: Int, value: BitArray) -> BitArray {
 
 /// Encode a sub-message as a length-delimited field.
 /// Omits the field entirely if the body is empty (proto3 absence semantics).
+/// Use this for regular message fields where absence = default.
 pub fn encode_message_field(field_number: Int, body: BitArray) -> BitArray {
   case bit_array.byte_size(body) == 0 {
     True -> <<>>
@@ -391,6 +392,19 @@ pub fn encode_message_field(field_number: Int, body: BitArray) -> BitArray {
       encode_len_delimited(body):bits,
     >>
   }
+}
+
+/// Encode a sub-message field unconditionally, even if the body is empty.
+/// Required for oneof variants: an empty message (e.g. ScanStartedEvent)
+/// must still appear on the wire so the decoder sees the oneof tag.
+pub fn encode_message_field_always(
+  field_number: Int,
+  body: BitArray,
+) -> BitArray {
+  <<
+    encode_tag(field_number, wire_len):bits,
+    encode_len_delimited(body):bits,
+  >>
 }
 
 // --- Unknown field skipping --------------------------------------------

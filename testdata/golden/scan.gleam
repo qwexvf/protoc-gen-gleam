@@ -175,14 +175,14 @@ pub fn encode_envelope(msg: Envelope) -> BitArray {
 
 fn encode_payload_payload(p: Payload) -> BitArray {
   case p {
-    StartCommand(m) -> wire.encode_message_field(oneof_envelope_start_command, encode_scan_start_command(m))
-    CancelCommand(m) -> wire.encode_message_field(oneof_envelope_cancel_command, encode_scan_cancel_command(m))
-    Started(m) -> wire.encode_message_field(oneof_envelope_started, encode_scan_started_event(m))
-    Progress(m) -> wire.encode_message_field(oneof_envelope_progress, encode_scan_progress_event(m))
-    Finding(m) -> wire.encode_message_field(oneof_envelope_finding, encode_scan_finding_event(m))
-    Log(m) -> wire.encode_message_field(oneof_envelope_log, encode_scan_log_event(m))
-    Completed(m) -> wire.encode_message_field(oneof_envelope_completed, encode_scan_completed_event(m))
-    Failed(m) -> wire.encode_message_field(oneof_envelope_failed, encode_scan_failed_event(m))
+    StartCommand(m) -> wire.encode_message_field_always(oneof_envelope_start_command, encode_scan_start_command(m))
+    CancelCommand(m) -> wire.encode_message_field_always(oneof_envelope_cancel_command, encode_scan_cancel_command(m))
+    Started(m) -> wire.encode_message_field_always(oneof_envelope_started, encode_scan_started_event(m))
+    Progress(m) -> wire.encode_message_field_always(oneof_envelope_progress, encode_scan_progress_event(m))
+    Finding(m) -> wire.encode_message_field_always(oneof_envelope_finding, encode_scan_finding_event(m))
+    Log(m) -> wire.encode_message_field_always(oneof_envelope_log, encode_scan_log_event(m))
+    Completed(m) -> wire.encode_message_field_always(oneof_envelope_completed, encode_scan_completed_event(m))
+    Failed(m) -> wire.encode_message_field_always(oneof_envelope_failed, encode_scan_failed_event(m))
   }
 }
 

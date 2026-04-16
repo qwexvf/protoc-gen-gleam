@@ -65,7 +65,7 @@ func generateOneofEncoder(ctx *genContext, oo oneofInfo, parentTypeName string) 
 		if f.Message != nil {
 			// Message variant — encode as length-delimited sub-message.
 			msgEncoder := encoderFnName(ctx, f.Message)
-			ctx.w.P("    %s(m) -> wire.encode_message_field(%s, %s(m))", variantName, constName, msgEncoder)
+			ctx.w.P("    %s(m) -> wire.encode_message_field_always(%s, %s(m))", variantName, constName, msgEncoder)
 		} else {
 			// Scalar variant — encode directly.
 			expr := encodeScalarExpr(ctx, f, "m", constName)
