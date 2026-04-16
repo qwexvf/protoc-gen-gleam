@@ -1,0 +1,151 @@
+// Comprehensive test proto exercising all supported proto3 features.
+syntax = "proto3";
+
+package test.v1;
+
+option go_package = "github.com/qwexvf/protoc-gen-gleam/testdata/testpb;testpb";
+
+// --- Enums ---------------------------------------------------------------
+
+enum Color {
+  COLOR_UNSPECIFIED = 0;
+  COLOR_RED = 1;
+  COLOR_GREEN = 2;
+  COLOR_BLUE = 3;
+}
+
+enum Priority {
+  PRIORITY_UNSPECIFIED = 0;
+  PRIORITY_LOW = 1;
+  PRIORITY_MEDIUM = 2;
+  PRIORITY_HIGH = 3;
+  PRIORITY_CRITICAL = 4;
+}
+
+// --- All scalar types ----------------------------------------------------
+
+message Scalars {
+  string str_val = 1;
+  bool bool_val = 2;
+  int32 int32_val = 3;
+  int64 int64_val = 4;
+  uint32 uint32_val = 5;
+  uint64 uint64_val = 6;
+  sint32 sint32_val = 7;
+  sint64 sint64_val = 8;
+  fixed32 fixed32_val = 9;
+  fixed64 fixed64_val = 10;
+  sfixed32 sfixed32_val = 11;
+  sfixed64 sfixed64_val = 12;
+  float float_val = 13;
+  double double_val = 14;
+  bytes bytes_val = 15;
+}
+
+// --- Optional fields (explicit presence) ---------------------------------
+
+message OptionalFields {
+  optional string name = 1;
+  optional int32 age = 2;
+  optional bool active = 3;
+  optional float score = 4;
+  optional double precise_score = 5;
+  optional bytes data = 6;
+  optional Color color = 7;
+  optional Timestamp created_at = 8;
+}
+
+// --- Repeated fields -----------------------------------------------------
+
+message RepeatedFields {
+  repeated string tags = 1;
+  repeated int32 numbers = 2;
+  repeated Color colors = 3;
+  repeated Nested items = 4;
+  repeated bytes chunks = 5;
+}
+
+// --- Map fields ----------------------------------------------------------
+
+message MapFields {
+  map<string, string> labels = 1;
+  map<string, int32> counts = 2;
+  map<int32, string> id_names = 3;
+  map<string, Nested> nested_map = 4;
+  map<string, Color> color_map = 5;
+  map<int64, bool> flags = 6;
+}
+
+// --- Nested messages -----------------------------------------------------
+
+message Nested {
+  string value = 1;
+  int32 level = 2;
+
+  message Inner {
+    string description = 1;
+    bool enabled = 2;
+
+    message Deep {
+      string id = 1;
+    }
+  }
+
+  Inner inner = 3;
+}
+
+// --- Oneof ---------------------------------------------------------------
+
+message OneofMessage {
+  string id = 1;
+
+  oneof content {
+    TextContent text = 10;
+    ImageContent image = 11;
+    VideoContent video = 12;
+  }
+}
+
+message TextContent {
+  string body = 1;
+  string format = 2;
+}
+
+message ImageContent {
+  string url = 1;
+  uint32 width = 2;
+  uint32 height = 3;
+}
+
+message VideoContent {
+  string url = 1;
+  uint32 duration_ms = 2;
+}
+
+// --- Empty message -------------------------------------------------------
+
+message Empty {}
+
+// --- Message referencing other message ------------------------------------
+
+message Wrapper {
+  Scalars scalars = 1;
+  OptionalFields optionals = 2;
+  RepeatedFields repeated = 3;
+  MapFields maps = 4;
+  Nested nested = 5;
+  OneofMessage oneof_msg = 6;
+  Empty empty = 7;
+}
+
+// --- Simple well-known-like types (inline, not google imports) -----------
+
+message Timestamp {
+  int64 seconds = 1;
+  int32 nanos = 2;
+}
+
+message Duration {
+  int64 seconds = 1;
+  int32 nanos = 2;
+}

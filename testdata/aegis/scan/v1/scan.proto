@@ -1,0 +1,168 @@
+// Aegis scan protocol — v1.
+//
+// This file is the single source of truth for the NATS contract between the
+// Gleam API and the Go orchestrator. Both sides generate types from this
+// schema; hand-written types that mirror this file are forbidden.
+//
+// Wire format: protobuf binary on NATS subjects.
+// Subject layout:
+//   scan.command.start            API       → Orchestrator
+//   scan.command.cancel           API       → Orchestrator
+//   scan.event.{scan_id}.started  Orchestrator → API
+//   scan.event.{scan_id}.progress Orchestrator → API
+//   scan.event.{scan_id}.finding  Orchestrator → API
+//   scan.event.{scan_id}.log      Orchestrator → API
+//   scan.event.{scan_id}.completed Orchestrator → API
+//   scan.event.{scan_id}.failed   Orchestrator → API
+//
+// Every message is wrapped in Envelope. Payload is a oneof so both sides get
+// an exhaustive switch at the type level.
+//
+// Evolution rules:
+//   - NEVER reuse or renumber a field tag. Mark removed fields `reserved`.
+//   - NEVER change a field's type.
+//   - Add new fields at the next free tag; existing readers ignore them.
+//   - Breaking changes require a new package (aegis.scan.v2).
+//   - `buf breaking` in CI enforces all of the above.
+
+syntax = "proto3";
+
+package aegis.scan.v1;
+
+option go_package = "github.com/qwexvf/aegis/services/orchestrator/internal/nats/pb/aegis/scan/v1;scanv1";
+
+// --- Enums --------------------------------------------------------------
+
+enum ScanMode {
+  SCAN_MODE_UNSPECIFIED = 0;
+  SCAN_MODE_URL = 1;
+  SCAN_MODE_REPO = 2;
+  SCAN_MODE_HOST = 3;
+  SCAN_MODE_CONTAINER = 4;
+}
+
+enum Severity {
+  SEVERITY_UNSPECIFIED = 0;
+  SEVERITY_CRITICAL = 1;
+  SEVERITY_HIGH = 2;
+  SEVERITY_MEDIUM = 3;
+  SEVERITY_LOW = 4;
+  SEVERITY_INFO = 5;
+}
+
+enum LogLevel {
+  LOG_LEVEL_UNSPECIFIED = 0;
+  LOG_LEVEL_DEBUG = 1;
+  LOG_LEVEL_INFO = 2;
+  LOG_LEVEL_WARN = 3;
+  LOG_LEVEL_ERROR = 4;
+}
+
+// --- Envelope -----------------------------------------------------------
+
+// Every NATS payload on an aegis.scan.v1.* subject is an Envelope.
+message Envelope {
+  // Schema version of the payload. Bumped in lockstep with the proto package
+  // version; v1 messages always carry schema_version = 1.
+  uint32 schema_version = 1;
+
+  // UUID, unique per message. Idempotency key for replay-safe consumers.
+  string event_id = 2;
+
+  // The scan this message pertains to. Present on every command and event.
+  string scan_id = 3;
+
+  // Producer's wall-clock timestamp in milliseconds since epoch.
+  int64 timestamp_ms = 4;
+
+  oneof payload {
+    // Commands: API → Orchestrator
+    ScanStartCommand start_command = 10;
+    ScanCancelCommand cancel_command = 11;
+
+    // Events: Orchestrator → API
+    ScanStartedEvent started = 20;
+    ScanProgressEvent progress = 21;
+    ScanFindingEvent finding = 22;
+    ScanLogEvent log = 23;
+    ScanCompletedEvent completed = 24;
+    ScanFailedEvent failed = 25;
+  }
+}
+
+// --- Commands (API → Orchestrator) --------------------------------------
+
+message ScanStartCommand {
+  // The thing to scan: URL for url mode, git URL for repo mode, SSH host for
+  // host mode. Validation lives in the API; the orchestrator trusts this value.
+  string target = 1;
+
+  ScanMode mode = 2;
+
+  // Tool identifiers (e.g. "nuclei", "semgrep", "trivy"). The orchestrator
+  // runs exactly this set; authorization has already been checked by the API.
+  repeated string tools = 3;
+
+  // Opaque references for the orchestrator's published events. The
+  // orchestrator does not interpret these, only echoes them back on events
+  // where useful.
+  string project_id = 4;
+  string org_id = 5;
+}
+
+message ScanCancelCommand {
+  // scan_id is in the envelope.
+}
+
+// --- Events (Orchestrator → API) ----------------------------------------
+
+message ScanStartedEvent {
+  // Emitted when the orchestrator transitions a scan from queued to running.
+}
+
+message ScanProgressEvent {
+  // Machine-readable phase identifier, e.g. "crawling", "nuclei", "trivy".
+  string phase = 1;
+
+  // 0.0 to 1.0. Monotonic within a scan.
+  float progress = 2;
+
+  // Optional human-readable message.
+  string message = 3;
+}
+
+message ScanFindingEvent {
+  Severity severity = 1;
+  string category = 2;
+  string title = 3;
+  string description = 4;
+
+  // Optional free-form evidence string. May contain request/response bodies,
+  // secret matches, CVE identifiers. Treat as sensitive.
+  string evidence = 5;
+
+  // Optional URL, file path, host — whatever locates the issue.
+  string endpoint = 6;
+
+  // Tool that produced this finding, e.g. "nuclei".
+  string tool = 7;
+}
+
+message ScanLogEvent {
+  LogLevel level = 1;
+  string message = 2;
+  // Optional phase association; useful when aggregating logs per step.
+  string phase = 3;
+}
+
+message ScanCompletedEvent {
+  uint32 finding_count = 1;
+  int64 duration_ms = 2;
+}
+
+message ScanFailedEvent {
+  // Human-readable reason. Not a stable identifier.
+  string reason = 1;
+  // Optional phase where the failure occurred.
+  string phase = 2;
+}
