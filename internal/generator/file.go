@@ -314,18 +314,9 @@ func fullTypeRef(ctx *genContext, f *protogen.Field) string {
 	return "Dynamic"
 }
 
+// fullMsgTypeName is an alias for fullTypeName (kept for readability at call sites).
 func fullMsgTypeName(msg *protogen.Message) string {
-	parts := []string{string(msg.Desc.Name())}
-	parent := msg.Desc.Parent()
-	for {
-		if pm, ok := parent.(protoreflect.MessageDescriptor); ok {
-			parts = append([]string{string(pm.Name())}, parts...)
-			parent = pm.Parent()
-		} else {
-			break
-		}
-	}
-	return strings.Join(parts, "")
+	return fullTypeName(msg)
 }
 
 // oneofInfo collects info about a oneof group.
@@ -340,28 +331,25 @@ func collectOneofs(msg *protogen.Message) []oneofInfo {
 	}
 
 	seen := make(map[string]*oneofInfo)
-	var result []oneofInfo
+	var order []string
 
 	for _, f := range msg.Fields {
 		oo := f.Desc.ContainingOneof()
-		if oo == nil {
-			continue
-		}
-		// Skip synthetic oneofs created by proto3 optional.
-		if oo.IsSynthetic() {
+		if oo == nil || oo.IsSynthetic() {
 			continue
 		}
 		name := string(oo.Name())
 		if info, ok := seen[name]; ok {
 			info.Fields = append(info.Fields, f)
 		} else {
-			info := oneofInfo{Desc: oo, Fields: []*protogen.Field{f}}
-			seen[name] = &info
-			result = append(result, info)
+			seen[name] = &oneofInfo{Desc: oo, Fields: []*protogen.Field{f}}
+			order = append(order, name)
 		}
 	}
-	for i, oo := range result {
-		result[i] = *seen[string(oo.Desc.Name())]
+
+	result := make([]oneofInfo, 0, len(order))
+	for _, name := range order {
+		result = append(result, *seen[name])
 	}
 	return result
 }
@@ -371,11 +359,20 @@ func generateOneofType(ctx *genContext, oo oneofInfo) {
 	ctx.w.P("pub type %s {", typeName)
 	for _, f := range oo.Fields {
 		variantName := gleamfmt.OneofVariantName(string(f.Desc.Name()))
-		msgType := fullTypeRef(ctx, f)
-		ctx.w.P("  %s(%s)", variantName, msgType)
+		variantType := oneofVariantType(ctx, f)
+		ctx.w.P("  %s(%s)", variantName, variantType)
 	}
 	ctx.w.P("}")
 	ctx.w.P("")
+}
+
+// oneofVariantType returns the Gleam type for a oneof variant.
+// Handles both message and scalar variants.
+func oneofVariantType(ctx *genContext, f *protogen.Field) string {
+	if f.Message != nil {
+		return fullTypeRef(ctx, f)
+	}
+	return gleamScalarType(ctx, f)
 }
 
 // regularFields returns fields not part of a real oneof.
@@ -447,15 +444,21 @@ func gleamScalarType(ctx *genContext, f *protogen.Field) string {
 
 func generateFieldConstants(w *writer, msg *protogen.Message, typeName string) {
 	prefix := "field_" + gleamfmt.ToSnakeCase(typeName)
+	oneofPrefix := "oneof_" + gleamfmt.ToSnakeCase(typeName)
 	for _, f := range msg.Fields {
 		oo := f.Desc.ContainingOneof()
 		if oo != nil && !oo.IsSynthetic() {
-			w.P("const oneof_%s: Int = %d", string(f.Desc.Name()), f.Desc.Number())
+			w.P("const %s_%s: Int = %d", oneofPrefix, string(f.Desc.Name()), f.Desc.Number())
 		} else {
 			w.P("const %s_%s: Int = %d", prefix, string(f.Desc.Name()), f.Desc.Number())
 		}
 	}
 	w.P("")
+}
+
+// oneofConstName returns the constant name for a oneof field, scoped by message.
+func oneofConstName(typeName string, f *protogen.Field) string {
+	return "oneof_" + gleamfmt.ToSnakeCase(typeName) + "_" + string(f.Desc.Name())
 }
 
 // writer wraps a generated file for convenient line-oriented output.
@@ -518,6 +521,18 @@ func decoderFnName(ctx *genContext, msg *protogen.Message) string {
 		return "well_known.decode_duration"
 	case "google.protobuf.Empty":
 		return "well_known.decode_empty"
+	case "google.protobuf.StringValue":
+		return "well_known.decode_string_value"
+	case "google.protobuf.Int64Value":
+		return "well_known.decode_int64_value"
+	case "google.protobuf.BoolValue":
+		return "well_known.decode_bool_value"
+	case "google.protobuf.FloatValue":
+		return "well_known.decode_float_value"
+	case "google.protobuf.DoubleValue":
+		return "well_known.decode_double_value"
+	case "google.protobuf.BytesValue":
+		return "well_known.decode_bytes_value"
 	}
 
 	if msg.Desc.ParentFile().Path() != ctx.file.Desc.Path() {

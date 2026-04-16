@@ -153,14 +153,14 @@ const field_envelope_schema_version: Int = 1
 const field_envelope_event_id: Int = 2
 const field_envelope_scan_id: Int = 3
 const field_envelope_timestamp_ms: Int = 4
-const oneof_start_command: Int = 10
-const oneof_cancel_command: Int = 11
-const oneof_started: Int = 20
-const oneof_progress: Int = 21
-const oneof_finding: Int = 22
-const oneof_log: Int = 23
-const oneof_completed: Int = 24
-const oneof_failed: Int = 25
+const oneof_envelope_start_command: Int = 10
+const oneof_envelope_cancel_command: Int = 11
+const oneof_envelope_started: Int = 20
+const oneof_envelope_progress: Int = 21
+const oneof_envelope_finding: Int = 22
+const oneof_envelope_log: Int = 23
+const oneof_envelope_completed: Int = 24
+const oneof_envelope_failed: Int = 25
 
 pub fn encode_envelope(msg: Envelope) -> BitArray {
   let Envelope(schema_version, event_id, scan_id, timestamp_ms, payload) = msg
@@ -175,14 +175,14 @@ pub fn encode_envelope(msg: Envelope) -> BitArray {
 
 fn encode_payload_payload(p: Payload) -> BitArray {
   case p {
-    StartCommand(m) -> wire.encode_message_field(oneof_start_command, encode_scan_start_command(m))
-    CancelCommand(m) -> wire.encode_message_field(oneof_cancel_command, encode_scan_cancel_command(m))
-    Started(m) -> wire.encode_message_field(oneof_started, encode_scan_started_event(m))
-    Progress(m) -> wire.encode_message_field(oneof_progress, encode_scan_progress_event(m))
-    Finding(m) -> wire.encode_message_field(oneof_finding, encode_scan_finding_event(m))
-    Log(m) -> wire.encode_message_field(oneof_log, encode_scan_log_event(m))
-    Completed(m) -> wire.encode_message_field(oneof_completed, encode_scan_completed_event(m))
-    Failed(m) -> wire.encode_message_field(oneof_failed, encode_scan_failed_event(m))
+    StartCommand(m) -> wire.encode_message_field(oneof_envelope_start_command, encode_scan_start_command(m))
+    CancelCommand(m) -> wire.encode_message_field(oneof_envelope_cancel_command, encode_scan_cancel_command(m))
+    Started(m) -> wire.encode_message_field(oneof_envelope_started, encode_scan_started_event(m))
+    Progress(m) -> wire.encode_message_field(oneof_envelope_progress, encode_scan_progress_event(m))
+    Finding(m) -> wire.encode_message_field(oneof_envelope_finding, encode_scan_finding_event(m))
+    Log(m) -> wire.encode_message_field(oneof_envelope_log, encode_scan_log_event(m))
+    Completed(m) -> wire.encode_message_field(oneof_envelope_completed, encode_scan_completed_event(m))
+    Failed(m) -> wire.encode_message_field(oneof_envelope_failed, encode_scan_failed_event(m))
   }
 }
 
@@ -256,7 +256,7 @@ fn envelope_field_handler(
         Error(e) -> Error(e)
         Ok(#(v, r)) -> Ok(#(EnvelopeAcc(..acc, timestamp_ms: v), r))
       }
-    n if n == oneof_start_command ->
+    n if n == oneof_envelope_start_command ->
       case wire.decode_len_delimited(rest) {
         Error(e) -> Error(e)
         Ok(#(body, r)) ->
@@ -265,7 +265,7 @@ fn envelope_field_handler(
             Ok(m) -> Ok(#(EnvelopeAcc(..acc, payload: Ok(StartCommand(m))), r))
           }
       }
-    n if n == oneof_cancel_command ->
+    n if n == oneof_envelope_cancel_command ->
       case wire.decode_len_delimited(rest) {
         Error(e) -> Error(e)
         Ok(#(body, r)) ->
@@ -274,7 +274,7 @@ fn envelope_field_handler(
             Ok(m) -> Ok(#(EnvelopeAcc(..acc, payload: Ok(CancelCommand(m))), r))
           }
       }
-    n if n == oneof_started ->
+    n if n == oneof_envelope_started ->
       case wire.decode_len_delimited(rest) {
         Error(e) -> Error(e)
         Ok(#(body, r)) ->
@@ -283,7 +283,7 @@ fn envelope_field_handler(
             Ok(m) -> Ok(#(EnvelopeAcc(..acc, payload: Ok(Started(m))), r))
           }
       }
-    n if n == oneof_progress ->
+    n if n == oneof_envelope_progress ->
       case wire.decode_len_delimited(rest) {
         Error(e) -> Error(e)
         Ok(#(body, r)) ->
@@ -292,7 +292,7 @@ fn envelope_field_handler(
             Ok(m) -> Ok(#(EnvelopeAcc(..acc, payload: Ok(Progress(m))), r))
           }
       }
-    n if n == oneof_finding ->
+    n if n == oneof_envelope_finding ->
       case wire.decode_len_delimited(rest) {
         Error(e) -> Error(e)
         Ok(#(body, r)) ->
@@ -301,7 +301,7 @@ fn envelope_field_handler(
             Ok(m) -> Ok(#(EnvelopeAcc(..acc, payload: Ok(Finding(m))), r))
           }
       }
-    n if n == oneof_log ->
+    n if n == oneof_envelope_log ->
       case wire.decode_len_delimited(rest) {
         Error(e) -> Error(e)
         Ok(#(body, r)) ->
@@ -310,7 +310,7 @@ fn envelope_field_handler(
             Ok(m) -> Ok(#(EnvelopeAcc(..acc, payload: Ok(Log(m))), r))
           }
       }
-    n if n == oneof_completed ->
+    n if n == oneof_envelope_completed ->
       case wire.decode_len_delimited(rest) {
         Error(e) -> Error(e)
         Ok(#(body, r)) ->
@@ -319,7 +319,7 @@ fn envelope_field_handler(
             Ok(m) -> Ok(#(EnvelopeAcc(..acc, payload: Ok(Completed(m))), r))
           }
       }
-    n if n == oneof_failed ->
+    n if n == oneof_envelope_failed ->
       case wire.decode_len_delimited(rest) {
         Error(e) -> Error(e)
         Ok(#(body, r)) ->

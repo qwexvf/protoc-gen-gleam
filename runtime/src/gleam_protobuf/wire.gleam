@@ -205,6 +205,76 @@ pub fn encode_repeated_ints(
   })
 }
 
+// --- Packed repeated decoding ------------------------------------------
+
+/// Decode a packed (LEN-prefixed) sequence of varints.
+/// Returns accumulated values prepended to the provided list (caller reverses).
+pub fn decode_packed_varints(
+  buf: BitArray,
+  acc: List(Int),
+) -> Result(List(Int), DecodeError) {
+  case buf {
+    <<>> -> Ok(acc)
+    _ ->
+      case decode_varint(buf) {
+        Error(e) -> Error(e)
+        Ok(#(v, rest)) -> decode_packed_varints(rest, [v, ..acc])
+      }
+  }
+}
+
+/// Decode a packed sequence of fixed32 values.
+pub fn decode_packed_fixed32(
+  buf: BitArray,
+  acc: List(Int),
+) -> Result(List(Int), DecodeError) {
+  case buf {
+    <<>> -> Ok(acc)
+    <<v:little-size(32), rest:bits>> ->
+      decode_packed_fixed32(rest, [v, ..acc])
+    _ -> Error(Truncated)
+  }
+}
+
+/// Decode a packed sequence of fixed64 values.
+pub fn decode_packed_fixed64(
+  buf: BitArray,
+  acc: List(Int),
+) -> Result(List(Int), DecodeError) {
+  case buf {
+    <<>> -> Ok(acc)
+    <<v:little-size(64), rest:bits>> ->
+      decode_packed_fixed64(rest, [v, ..acc])
+    _ -> Error(Truncated)
+  }
+}
+
+/// Decode a packed sequence of float32 values.
+pub fn decode_packed_float32(
+  buf: BitArray,
+  acc: List(Float),
+) -> Result(List(Float), DecodeError) {
+  case buf {
+    <<>> -> Ok(acc)
+    <<v:float-little-size(32), rest:bits>> ->
+      decode_packed_float32(rest, [v, ..acc])
+    _ -> Error(Truncated)
+  }
+}
+
+/// Decode a packed sequence of float64 values.
+pub fn decode_packed_float64(
+  buf: BitArray,
+  acc: List(Float),
+) -> Result(List(Float), DecodeError) {
+  case buf {
+    <<>> -> Ok(acc)
+    <<v:float-little-size(64), rest:bits>> ->
+      decode_packed_float64(rest, [v, ..acc])
+    _ -> Error(Truncated)
+  }
+}
+
 // --- Repeated messages -------------------------------------------------
 
 /// Encode a list of messages as multiple length-delimited entries.
@@ -312,11 +382,15 @@ pub fn encode_bytes_field(field_number: Int, value: BitArray) -> BitArray {
 // --- Embedded message field --------------------------------------------
 
 /// Encode a sub-message as a length-delimited field.
+/// Omits the field entirely if the body is empty (proto3 absence semantics).
 pub fn encode_message_field(field_number: Int, body: BitArray) -> BitArray {
-  <<
-    encode_tag(field_number, wire_len):bits,
-    encode_len_delimited(body):bits,
-  >>
+  case bit_array.byte_size(body) == 0 {
+    True -> <<>>
+    False -> <<
+      encode_tag(field_number, wire_len):bits,
+      encode_len_delimited(body):bits,
+    >>
+  }
 }
 
 // --- Unknown field skipping --------------------------------------------
@@ -356,11 +430,12 @@ pub fn skip_field(
 
 /// ZigZag-encode a signed integer for sint32/sint64 fields.
 /// Maps signed integers to unsigned: 0 -> 0, -1 -> 1, 1 -> 2, -2 -> 3, ...
+/// Uses the canonical formula: (n << 1) ^ (n >> 63).
 pub fn zigzag_encode(value: Int) -> Int {
-  case value >= 0 {
-    True -> value * 2
-    False -> { value * -2 } - 1
-  }
+  int.bitwise_exclusive_or(
+    int.bitwise_shift_left(value, 1),
+    int.bitwise_shift_right(value, 63),
+  )
 }
 
 /// ZigZag-decode an unsigned integer back to signed.

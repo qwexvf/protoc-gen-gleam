@@ -144,24 +144,31 @@ pub fn encode_string_value(msg: StringValue) -> BitArray {
 pub fn decode_string_value(
   buf: BitArray,
 ) -> Result(StringValue, wire.DecodeError) {
+  decode_wrapper_string(buf, "")
+}
+
+fn decode_wrapper_string(
+  buf: BitArray,
+  value: String,
+) -> Result(StringValue, wire.DecodeError) {
   case buf {
-    <<>> -> Ok(StringValue(value: ""))
+    <<>> -> Ok(StringValue(value: value))
     _ ->
       case wire.decode_tag(buf) {
         Error(e) -> Error(e)
         Ok(#(1, _, rest)) ->
           case wire.decode_len_delimited(rest) {
             Error(e) -> Error(e)
-            Ok(#(bytes, _r)) ->
+            Ok(#(bytes, r)) ->
               case wire.decode_string(bytes) {
                 Error(e) -> Error(e)
-                Ok(s) -> Ok(StringValue(value: s))
+                Ok(s) -> decode_wrapper_string(r, s)
               }
           }
         Ok(#(_, wt, rest)) ->
           case wire.skip_field(rest, wt) {
             Error(e) -> Error(e)
-            Ok(_r) -> Ok(StringValue(value: ""))
+            Ok(r) -> decode_wrapper_string(r, value)
           }
       }
   }
@@ -175,12 +182,70 @@ pub fn encode_int64_value(msg: Int64Value) -> BitArray {
   wire.encode_int_field(1, msg.value)
 }
 
+pub fn decode_int64_value(
+  buf: BitArray,
+) -> Result(Int64Value, wire.DecodeError) {
+  decode_wrapper_int(buf, 0)
+}
+
+fn decode_wrapper_int(
+  buf: BitArray,
+  value: Int,
+) -> Result(Int64Value, wire.DecodeError) {
+  case buf {
+    <<>> -> Ok(Int64Value(value: value))
+    _ ->
+      case wire.decode_tag(buf) {
+        Error(e) -> Error(e)
+        Ok(#(1, _, rest)) ->
+          case wire.decode_varint(rest) {
+            Error(e) -> Error(e)
+            Ok(#(v, r)) -> decode_wrapper_int(r, v)
+          }
+        Ok(#(_, wt, rest)) ->
+          case wire.skip_field(rest, wt) {
+            Error(e) -> Error(e)
+            Ok(r) -> decode_wrapper_int(r, value)
+          }
+      }
+  }
+}
+
 pub type BoolValue {
   BoolValue(value: Bool)
 }
 
 pub fn encode_bool_value(msg: BoolValue) -> BitArray {
   wire.encode_bool_field(1, msg.value)
+}
+
+pub fn decode_bool_value(
+  buf: BitArray,
+) -> Result(BoolValue, wire.DecodeError) {
+  decode_wrapper_bool(buf, False)
+}
+
+fn decode_wrapper_bool(
+  buf: BitArray,
+  value: Bool,
+) -> Result(BoolValue, wire.DecodeError) {
+  case buf {
+    <<>> -> Ok(BoolValue(value: value))
+    _ ->
+      case wire.decode_tag(buf) {
+        Error(e) -> Error(e)
+        Ok(#(1, _, rest)) ->
+          case wire.decode_varint(rest) {
+            Error(e) -> Error(e)
+            Ok(#(v, r)) -> decode_wrapper_bool(r, v != 0)
+          }
+        Ok(#(_, wt, rest)) ->
+          case wire.skip_field(rest, wt) {
+            Error(e) -> Error(e)
+            Ok(r) -> decode_wrapper_bool(r, value)
+          }
+      }
+  }
 }
 
 pub type FloatValue {
@@ -191,6 +256,35 @@ pub fn encode_float_value(msg: FloatValue) -> BitArray {
   wire.encode_float_field(1, msg.value)
 }
 
+pub fn decode_float_value(
+  buf: BitArray,
+) -> Result(FloatValue, wire.DecodeError) {
+  decode_wrapper_float(buf, 0.0)
+}
+
+fn decode_wrapper_float(
+  buf: BitArray,
+  value: Float,
+) -> Result(FloatValue, wire.DecodeError) {
+  case buf {
+    <<>> -> Ok(FloatValue(value: value))
+    _ ->
+      case wire.decode_tag(buf) {
+        Error(e) -> Error(e)
+        Ok(#(1, _, rest)) ->
+          case wire.decode_float32(rest) {
+            Error(e) -> Error(e)
+            Ok(#(v, r)) -> decode_wrapper_float(r, v)
+          }
+        Ok(#(_, wt, rest)) ->
+          case wire.skip_field(rest, wt) {
+            Error(e) -> Error(e)
+            Ok(r) -> decode_wrapper_float(r, value)
+          }
+      }
+  }
+}
+
 pub type DoubleValue {
   DoubleValue(value: Float)
 }
@@ -199,10 +293,68 @@ pub fn encode_double_value(msg: DoubleValue) -> BitArray {
   wire.encode_double_field(1, msg.value)
 }
 
+pub fn decode_double_value(
+  buf: BitArray,
+) -> Result(DoubleValue, wire.DecodeError) {
+  decode_wrapper_double(buf, 0.0)
+}
+
+fn decode_wrapper_double(
+  buf: BitArray,
+  value: Float,
+) -> Result(DoubleValue, wire.DecodeError) {
+  case buf {
+    <<>> -> Ok(DoubleValue(value: value))
+    _ ->
+      case wire.decode_tag(buf) {
+        Error(e) -> Error(e)
+        Ok(#(1, _, rest)) ->
+          case wire.decode_float64(rest) {
+            Error(e) -> Error(e)
+            Ok(#(v, r)) -> decode_wrapper_double(r, v)
+          }
+        Ok(#(_, wt, rest)) ->
+          case wire.skip_field(rest, wt) {
+            Error(e) -> Error(e)
+            Ok(r) -> decode_wrapper_double(r, value)
+          }
+      }
+  }
+}
+
 pub type BytesValue {
   BytesValue(value: BitArray)
 }
 
 pub fn encode_bytes_value(msg: BytesValue) -> BitArray {
   wire.encode_bytes_field(1, msg.value)
+}
+
+pub fn decode_bytes_value(
+  buf: BitArray,
+) -> Result(BytesValue, wire.DecodeError) {
+  decode_wrapper_bytes(buf, <<>>)
+}
+
+fn decode_wrapper_bytes(
+  buf: BitArray,
+  value: BitArray,
+) -> Result(BytesValue, wire.DecodeError) {
+  case buf {
+    <<>> -> Ok(BytesValue(value: value))
+    _ ->
+      case wire.decode_tag(buf) {
+        Error(e) -> Error(e)
+        Ok(#(1, _, rest)) ->
+          case wire.decode_len_delimited(rest) {
+            Error(e) -> Error(e)
+            Ok(#(bytes, r)) -> decode_wrapper_bytes(r, bytes)
+          }
+        Ok(#(_, wt, rest)) ->
+          case wire.skip_field(rest, wt) {
+            Error(e) -> Error(e)
+            Ok(r) -> decode_wrapper_bytes(r, value)
+          }
+      }
+  }
 }

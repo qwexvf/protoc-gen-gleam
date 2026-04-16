@@ -2,6 +2,7 @@ package generator
 
 import (
 	"fmt"
+	"strings"
 
 	gleamfmt "github.com/qwexvf/protoc-gen-gleam/internal/gleam"
 	"google.golang.org/protobuf/compiler/protogen"
@@ -48,11 +49,11 @@ func generateEncoder(ctx *genContext, msg *protogen.Message, typeName string, on
 	ctx.w.P("")
 
 	for _, oo := range oneofs {
-		generateOneofEncoder(ctx, oo)
+		generateOneofEncoder(ctx, oo, typeName)
 	}
 }
 
-func generateOneofEncoder(ctx *genContext, oo oneofInfo) {
+func generateOneofEncoder(ctx *genContext, oo oneofInfo, parentTypeName string) {
 	ooTypeName := gleamfmt.ToPascalCase(string(oo.Desc.Name()))
 	fnName := "encode_" + gleamfmt.ToSnakeCase(string(oo.Desc.Name())) + "_payload"
 
@@ -60,9 +61,16 @@ func generateOneofEncoder(ctx *genContext, oo oneofInfo) {
 	ctx.w.P("  case p {")
 	for _, f := range oo.Fields {
 		variantName := gleamfmt.OneofVariantName(string(f.Desc.Name()))
-		msgEncoder := encoderFnName(ctx, f.Message)
-		constName := fmt.Sprintf("oneof_%s", string(f.Desc.Name()))
-		ctx.w.P("    %s(m) -> wire.encode_message_field(%s, %s(m))", variantName, constName, msgEncoder)
+		constName := oneofConstName(parentTypeName, f)
+		if f.Message != nil {
+			// Message variant — encode as length-delimited sub-message.
+			msgEncoder := encoderFnName(ctx, f.Message)
+			ctx.w.P("    %s(m) -> wire.encode_message_field(%s, %s(m))", variantName, constName, msgEncoder)
+		} else {
+			// Scalar variant — encode directly.
+			expr := encodeScalarExpr(ctx, f, "m", constName)
+			ctx.w.P("    %s(m) -> <<%s>>", variantName, expr)
+		}
 	}
 	ctx.w.P("  }")
 	ctx.w.P("}")
@@ -246,16 +254,5 @@ func mapValueEncoder(ctx *genContext, f *protogen.Field) string {
 }
 
 func joinComma(ss []string) string {
-	return fmt.Sprintf("%s", joinWith(ss, ", "))
-}
-
-func joinWith(ss []string, sep string) string {
-	result := ""
-	for i, s := range ss {
-		if i > 0 {
-			result += sep
-		}
-		result += s
-	}
-	return result
+	return strings.Join(ss, ", ")
 }
