@@ -44,20 +44,31 @@ pub type DecodeError {
 
 // --- Varint ------------------------------------------------------------
 
-/// Encode a non-negative integer as a protobuf varint.
+/// Encode an integer as a protobuf varint.
+/// Handles negative values via two's complement (10-byte encoding).
 pub fn encode_varint(value: Int) -> BitArray {
-  do_encode_varint(value, <<>>)
+  // Negative values must be encoded as 10-byte two's complement.
+  let unsigned = case value >= 0 {
+    True -> value
+    False -> int.bitwise_and(value, 0xFFFFFFFFFFFFFFFF)
+  }
+  do_encode_varint(unsigned, <<>>, 0)
 }
 
-fn do_encode_varint(value: Int, acc: BitArray) -> BitArray {
-  case value < 128 {
-    True -> <<acc:bits, value:8>>
-    False -> {
-      let low = int.bitwise_and(value, 0x7F)
-      let byte = int.bitwise_or(low, 0x80)
-      let rest = int.bitwise_shift_right(value, 7)
-      do_encode_varint(rest, <<acc:bits, byte:8>>)
-    }
+fn do_encode_varint(value: Int, acc: BitArray, written: Int) -> BitArray {
+  case written >= 9 {
+    // 10th byte: emit final byte without continuation bit (varint max = 10 bytes).
+    True -> <<acc:bits, int.bitwise_and(value, 0xFF):8>>
+    False ->
+      case value < 128 && value >= 0 {
+        True -> <<acc:bits, value:8>>
+        False -> {
+          let low = int.bitwise_and(value, 0x7F)
+          let byte = int.bitwise_or(low, 0x80)
+          let rest = int.bitwise_shift_right(value, 7)
+          do_encode_varint(rest, <<acc:bits, byte:8>>, written + 1)
+        }
+      }
   }
 }
 
@@ -82,7 +93,13 @@ fn do_decode_varint(
             int.bitwise_or(acc, int.bitwise_shift_left(low, shift))
           case int.bitwise_and(byte, 0x80) {
             0 -> Ok(#(next_acc, rest))
-            _ -> do_decode_varint(rest, next_acc, shift + 7, bytes_read + 1)
+            _ ->
+              // 10th byte (bytes_read == 9) must not have continuation bit.
+              case bytes_read >= 9 {
+                True -> Error(InvalidVarint)
+                False ->
+                  do_decode_varint(rest, next_acc, shift + 7, bytes_read + 1)
+              }
           }
         }
         _ -> Error(Truncated)

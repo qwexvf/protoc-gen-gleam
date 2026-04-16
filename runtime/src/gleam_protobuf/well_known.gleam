@@ -7,6 +7,7 @@
 ////
 //// Users can also import these directly for manual construction.
 
+import gleam/bit_array
 import gleam_protobuf/wire
 
 // --- google.protobuf.Timestamp ------------------------------------------
@@ -138,7 +139,10 @@ pub type StringValue {
 }
 
 pub fn encode_string_value(msg: StringValue) -> BitArray {
-  wire.encode_string_field(1, msg.value)
+  // Always emit field 1, even for empty string — wrapper types must
+  // distinguish null (absent wrapper) from "" (present with empty value).
+  let bytes = bit_array.from_string(msg.value)
+  <<wire.encode_tag(1, wire.wire_len):bits, wire.encode_len_delimited(bytes):bits>>
 }
 
 pub fn decode_string_value(
@@ -327,7 +331,8 @@ pub type BytesValue {
 }
 
 pub fn encode_bytes_value(msg: BytesValue) -> BitArray {
-  wire.encode_bytes_field(1, msg.value)
+  // Always emit — wrapper type must distinguish null from empty bytes.
+  <<wire.encode_tag(1, wire.wire_len):bits, wire.encode_len_delimited(msg.value):bits>>
 }
 
 pub fn decode_bytes_value(
